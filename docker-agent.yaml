@@ -98,6 +98,7 @@ agents:
       - Ask clarifying questions only when truly necessary
       - Summarize outcomes after specialists complete their work
       </communication_style>
+    skills: true
     add_date: true
     add_environment_info: true
     add_prompt_files:
@@ -178,6 +179,7 @@ agents:
       </communication_style>
       
       Do not write implementation code - your role is design and planning only.
+    skills: true
     add_date: true
     add_environment_info: true
     add_prompt_files:
@@ -265,6 +267,7 @@ agents:
       </communication_style>
       
       Update shared todos and project state as you progress through implementation.
+    skills: true
     add_date: true
     add_environment_info: true
     add_prompt_files:
@@ -365,6 +368,7 @@ agents:
       </communication_approach>
       
       When working on Go projects, use `task test` and `task lint` for validation.
+    skills: true
     add_date: true
     add_environment_info: true
     add_prompt_files:
@@ -487,6 +491,7 @@ agents:
       
       Always verify your documentation by testing examples and validating against actual code.
       Update project state with documentation status.
+    skills: true
     add_date: true
     add_environment_info: true
     add_prompt_files:
@@ -607,6 +612,7 @@ agents:
       </communication_style>
       
       Update shared todos with issue tracking tasks. Hand off to specialists when routing issues.
+    skills: true
     add_date: true
     toolsets:
       - type: filesystem
@@ -764,6 +770,7 @@ agents:
       
       When issues are found, provide clear guidance on fixes and offer to help troubleshoot.
       Update shared todos with PR review tasks.
+    skills: true
     add_date: true
     add_environment_info: true
     add_prompt_files:
@@ -846,6 +853,7 @@ agents:
       
       You are an efficient research assistant. Return relevant, actionable information quickly.
       Focus on accuracy and relevance over volume.
+    skills: true
     toolsets:
       - type: mcp
         ref: docker:web-search
