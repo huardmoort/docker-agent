@@ -1,43 +1,126 @@
 # Project Agent Guidelines
 
-This document provides guidance for AI agents and contributors working on the
-docker-agent codebase.
+This document is loaded by every agent in this team's configuration via
+`add_prompt_files`. Rules below apply to all agents.
+
+---
+
+## Plan-First Operating Rule
+
+**Always present a plan and wait for explicit user approval before any
+side-effecting action.**
+
+Side-effecting actions (require approval):
+
+- creating, modifying, or deleting files
+- running build, test, lint, or format commands
+- committing, pushing, branching, opening or merging pull requests
+- calling MCP tools that mutate state (GitHub issue/PR edits, etc.)
+
+Read-only actions do **not** require approval:
+
+- reading files, searching, listing directories
+- inspecting git or GitButler state
+- fetching documentation, web searches
+- thinking and drafting plans
+
+Plan format:
+
+1. A numbered list of concrete steps with the exact files or commands.
+2. The expected outcome of each step.
+3. End with `STOP. Awaiting approval.`
+4. After approval, execute one step at a time and report after each.
+
+This rule overrides any conflicting guidance in agent instructions or
+skills.
+
+---
+
+## Communication Style
+
+- Direct and efficient. No filler phrases, no excessive affirmations.
+- Avoid LLM clichés: "comprehensive", "robust", "leverage", "delve into",
+  "I'd be happy to", "great question".
+- One clear point per message; split if you have two.
+- Report results concisely; don't restate what the user just said.
+- Use markdown tables for any structured comparison of three or more
+  items.
+- When generating code, do not paste it back in the chat — write it to
+  a file. Status updates only in chat.
+
+---
+
+## Skill Catalogue
+
+The team maintains a catalogue of skills under `.agents/skills/`. Prefer
+invoking a skill over re-deriving its procedure inline. Skills surface as
+slash commands in the TUI (`/skill-name`).
+
+**Shared recipes (inline, short)**
+
+| Skill | Use when |
+|---|---|
+| `code-quality-checklist` | Writing, reviewing, or judging readiness of code |
+| `git-commit-conventions` | Writing or reviewing commit messages |
+| `validate-go-change` | After a Go change, before declaring done |
+| `pr-comment-style` | Drafting PR review comments |
+
+**Workflow skills (fork sub-agents)**
+
+| Skill | Use when |
+|---|---|
+| `triage-issue` | Classifying a single GitHub issue or PR |
+| `triage-backlog` | Batch-triaging many open issues at once |
+| `review-pr` | Performing a full PR review end-to-end |
+| `diagnose-bug` | Investigating and fixing a reported bug |
+| `design-feature` | Producing a technical design / spec |
+| `write-docs` | Writing or updating project documentation |
+| `research-topic` | Searching the web for prior art, docs, examples |
+| `bump-config-version` | Freezing the latest config schema and bumping the version |
+| `bump-go-dependencies` | Updating Go module dependencies one at a time |
+
+When a skill applies, the agent should invoke it instead of inlining the
+procedure. Skills compose: many of them reference each other.
+
+---
 
 ## Code Quality Standards
 
-- Write clean, self-documenting code with minimal comments
-- Follow existing code style and patterns in the project
-- Implement proper error handling and validation
-- Consider edge cases and failure scenarios
-- Ensure code is maintainable and extensible
+The full quality bar lives in the `code-quality-checklist` skill. The
+short version:
 
-### Code Comments Philosophy
+- Self-documenting code; comments only when the *why* isn't obvious.
+- Never write a comment that restates what the code does.
+- Proper error handling, considered edge cases, matching tests.
+- Match the surrounding style.
 
-Comments are only added when the code's purpose or logic is not immediately
-evident. Never write comments that merely restate what the code does (e.g.
-`// increment counter` above `counter++`). Comments should explain **why**
-something is done a certain way, document non-obvious edge cases, or clarify
-complex algorithms that cannot be simplified further.
+---
 
 ## Working Approach
 
-- Use tools to gather information rather than relying on assumptions
-- Examine existing code before making changes
-- Validate all changes before considering tasks complete
-- Ask clarifying questions only when truly necessary
-- When possible, call independent tools concurrently — it's faster
+- Use tools to gather information rather than guessing.
+- Examine existing code before making changes.
+- Validate every change before declaring complete.
+- Ask clarifying questions only when truly necessary.
+- Call independent tools concurrently when possible — it's faster.
+
+---
 
 ## Validation Requirements
 
-Before marking work as complete:
+For Go changes, run the `validate-go-change` skill (or directly):
 
-- [ ] Code builds successfully (`task build`)
-- [ ] All tests pass (`task test`)
-- [ ] Linter shows no new issues (`task lint`)
-- [ ] Changes meet acceptance criteria
-- [ ] Code follows project patterns and conventions
-- [ ] Proper error handling is implemented
-- [ ] Edge cases are considered
+- [ ] `task build` succeeds
+- [ ] `task test` passes
+- [ ] `task lint` reports no new issues
+- [ ] Acceptance criteria met
+- [ ] Project patterns followed
+- [ ] Edge cases considered
+
+For non-code changes, validate appropriately (e.g. `jq empty` for YAML,
+markdown link checks for docs).
+
+---
 
 # Development Commands
 
@@ -101,9 +184,17 @@ Before marking work as complete:
 
 # Git Practices
 
-- Write clear, descriptive commit messages
-- Prefer [Conventional Commits](https://www.conventionalcommits.org/) format, e.g. `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`
-- Make commits logical and atomic
-- Group related changes together; avoid mixing unrelated changes
-- Keep branches focused on single features or fixes
-- Ensure your branch is up-to-date before submitting
+This project uses GitButler (`but`) for all version-control write
+operations. Never run `git commit`, `git add`, `git push`, `git checkout`,
+`git rebase`, `git stash`, or `git merge` directly. Read-only `git log` /
+`git blame` / `git show --stat` are fine.
+
+The full conventions live in the `git-commit-conventions` skill. The
+short version:
+
+- Conventional Commits subjects: `feat:`, `fix:`, `docs:`, `chore:`,
+  `refactor:`, `test:`, `perf:`, `security:`.
+- Atomic commits — one logical change per commit, no "and" in subjects.
+- Body explains the *why*, not the *what*.
+- Agent-authored commits end with `Assisted-By: docker-agent`.
+- Branches focused on a single feature or fix; up to date before submit.
