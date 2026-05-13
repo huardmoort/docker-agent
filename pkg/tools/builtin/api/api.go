@@ -149,7 +149,7 @@ func (t *Tool) Tools(context.Context) ([]tools.Tool, error) {
 }
 
 func setHeaders(req *http.Request, headers map[string]string) {
-	useragent.SetIdentity(req.Context(), req)
+	useragent.SetIdentity(req)
 	for k, v := range upstream.ResolveHeaders(req.Context(), headers) {
 		req.Header.Set(k, v)
 	}

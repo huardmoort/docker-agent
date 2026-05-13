@@ -387,7 +387,7 @@ func sanitizeToolName(name string) string {
 // an HTTP request. Header values may contain ${headers.NAME} placeholders
 // that are resolved from upstream headers stored in the request context.
 func setHeaders(req *http.Request, headers map[string]string) {
-	useragent.SetIdentity(req.Context(), req)
+	useragent.SetIdentity(req)
 	for k, v := range upstream.ResolveHeaders(req.Context(), headers) {
 		req.Header.Set(k, v)
 	}

@@ -184,7 +184,7 @@ func (h *fetchHandler) fetchURL(ctx context.Context, client *http.Client, urlStr
 		return result
 	}
 	req.Header.Set("Accept", fmtHandler.accept)
-	useragent.SetIdentity(ctx, req)
+	useragent.SetIdentity(req)
 	// Apply caller-configured headers last so an operator-supplied
 	// Authorization, User-Agent, Accept, ... wins over the defaults set above.
 	for k, v := range h.headers {
@@ -248,7 +248,7 @@ func (h *fetchHandler) fetchRobots(ctx context.Context, client *http.Client, tar
 		return nil, nil
 	}
 
-	useragent.SetIdentity(ctx, req)
+	useragent.SetIdentity(req)
 	// Apply custom headers to robots.txt requests too, so authenticated
 	// endpoints that also protect robots.txt work correctly. Cross-host
 	// leaks are prevented by the shared client's CheckRedirect.

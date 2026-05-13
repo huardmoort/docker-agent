@@ -7,7 +7,6 @@
 package useragent
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -46,10 +45,10 @@ const (
 // honour an operator-supplied override should apply those headers AFTER
 // calling SetIdentity. This matches the precedence rule already used in
 // the fetch tool for User-Agent and Accept.
-func SetIdentity(ctx context.Context, req *http.Request) {
+func SetIdentity(req *http.Request) {
 	req.Header.Set("User-Agent", Header)
 	req.Header.Set(HeaderAgentVersion, version.Version)
-	if v := desktop.GetVersion(ctx); v != "" {
+	if v := desktop.GetVersion(); v != "" {
 		req.Header.Set(HeaderDesktopVersion, v)
 	}
 }

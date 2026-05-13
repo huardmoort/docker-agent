@@ -15,7 +15,7 @@ func TestSetIdentity_StampsAgentVersionAndUserAgent(t *testing.T) {
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", http.NoBody)
 	require.NoError(t, err)
 
-	SetIdentity(req.Context(), req)
+	SetIdentity(req)
 
 	assert.Equal(t, Header, req.Header.Get("User-Agent"))
 	assert.Equal(t, version.Version, req.Header.Get(HeaderAgentVersion))
@@ -30,7 +30,7 @@ func TestSetIdentity_OmitsDesktopVersionWhenAbsent(t *testing.T) {
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/", http.NoBody)
 	require.NoError(t, err)
 
-	SetIdentity(req.Context(), req)
+	SetIdentity(req)
 
 	if got := req.Header.Get(HeaderDesktopVersion); got != "" {
 		t.Logf("Docker Desktop reachable in this environment; skipping absence assertion (got %q)", got)
