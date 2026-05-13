@@ -791,7 +791,8 @@ var ErrModelSwitchingNotSupported = errors.New("model switching not supported by
 // the active selection without a second round-trip. When no override is
 // active, the agent's configured default carries IsCurrent=true; if the
 // override points at an inline provider/model not present in the agent
-// config, a synthetic choice is appended (mirrors App.AvailableModels).
+// config, a synthetic choice is appended (mirrors App.AvailableModels via
+// the shared runtime.DecorateModelChoices helper).
 func (sm *SessionManager) AvailableSessionModels(ctx context.Context, sessionID string) (string, string, []runtime.ModelChoice, error) {
 	sm.mux.Lock()
 	defer sm.mux.Unlock()
@@ -813,66 +814,8 @@ func (sm *SessionManager) AvailableSessionModels(ctx context.Context, sessionID 
 		customRefs = rs.session.CustomModelsUsed
 	}
 
-	choices := decorateModelChoices(rs.runtime.AvailableModels(ctx), current, customRefs)
+	choices := runtime.DecorateModelChoices(rs.runtime.AvailableModels(ctx), current, customRefs)
 	return agentName, current, choices, nil
-}
-
-// decorateModelChoices marks the active selection with IsCurrent and
-// appends any custom (provider/model) refs from the session history that
-// the runtime doesn't already expose. Mirrors the post-processing in
-// App.AvailableModels so HTTP and TUI clients see the same picker state.
-func decorateModelChoices(models []runtime.ModelChoice, current string, customRefs []string) []runtime.ModelChoice {
-	existingRefs := make(map[string]bool, len(models))
-	for _, m := range models {
-		existingRefs[m.Ref] = true
-	}
-
-	currentFound := current == ""
-	for i := range models {
-		if current != "" {
-			if models[i].Ref == current {
-				models[i].IsCurrent = true
-				currentFound = true
-			}
-		} else {
-			models[i].IsCurrent = models[i].IsDefault
-		}
-	}
-
-	for _, ref := range customRefs {
-		if existingRefs[ref] {
-			continue
-		}
-		existingRefs[ref] = true
-
-		prov, name, _ := strings.Cut(ref, "/")
-		isCurrent := ref == current
-		if isCurrent {
-			currentFound = true
-		}
-		models = append(models, runtime.ModelChoice{
-			Name:      ref,
-			Ref:       ref,
-			Provider:  prov,
-			Model:     name,
-			IsCurrent: isCurrent,
-			IsCustom:  true,
-		})
-	}
-
-	if !currentFound && strings.Contains(current, "/") {
-		prov, name, _ := strings.Cut(current, "/")
-		models = append(models, runtime.ModelChoice{
-			Name:      current,
-			Ref:       current,
-			Provider:  prov,
-			Model:     name,
-			IsCurrent: true,
-			IsCustom:  true,
-		})
-	}
-
-	return models
 }
 
 // SetSessionAgentModel applies modelRef as the model override for the

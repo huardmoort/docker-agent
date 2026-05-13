@@ -73,6 +73,72 @@ type SessionModelsResponse struct {
 	Models          []ModelChoice `json:"models"`
 }
 
+// DecorateModelChoices marks the active selection with IsCurrent and
+// appends any custom (provider/model) refs from the session history that
+// the runtime does not already expose. It is used by every consumer that
+// wants to render a model picker (the TUI App, the HTTP /sessions/:id/models
+// endpoint, …) so they all agree on which entry is current and what the
+// final list looks like.
+//
+// currentRef is the model override active for the agent ("" when none),
+// and customRefs is the session's CustomModelsUsed history.
+func DecorateModelChoices(models []ModelChoice, currentRef string, customRefs []string) []ModelChoice {
+	existingRefs := make(map[string]bool, len(models))
+	for _, m := range models {
+		existingRefs[m.Ref] = true
+	}
+
+	currentFound := currentRef == ""
+	for i := range models {
+		if currentRef != "" {
+			if models[i].Ref == currentRef {
+				models[i].IsCurrent = true
+				currentFound = true
+			}
+		} else {
+			models[i].IsCurrent = models[i].IsDefault
+		}
+	}
+
+	for _, ref := range customRefs {
+		if existingRefs[ref] {
+			continue
+		}
+		existingRefs[ref] = true
+
+		prov, name, _ := strings.Cut(ref, "/")
+		isCurrent := ref == currentRef
+		if isCurrent {
+			currentFound = true
+		}
+		models = append(models, ModelChoice{
+			Name:      ref,
+			Ref:       ref,
+			Provider:  prov,
+			Model:     name,
+			IsCurrent: isCurrent,
+			IsCustom:  true,
+		})
+	}
+
+	// If the override points at an inline provider/model not in the
+	// runtime's list nor in the session's history, fabricate a synthetic
+	// choice so the picker can still highlight the active selection.
+	if !currentFound && strings.Contains(currentRef, "/") {
+		prov, name, _ := strings.Cut(currentRef, "/")
+		models = append(models, ModelChoice{
+			Name:      currentRef,
+			Ref:       currentRef,
+			Provider:  prov,
+			Model:     name,
+			IsCurrent: true,
+			IsCustom:  true,
+		})
+	}
+
+	return models
+}
+
 // ModelSwitcherConfig holds the configuration needed for model switching.
 // This is populated by the app layer when creating the runtime.
 type ModelSwitcherConfig struct {

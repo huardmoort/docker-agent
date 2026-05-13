@@ -370,49 +370,32 @@ func TestSessionManager_SetSessionAgentModel_RollsBackOnStoreFailure(t *testing.
 	assert.False(t, runtimeHas, "runtime override must be rolled back")
 }
 
-// decorateModelChoices is exercised through the GET handler tests above;
-// this unit test pins a few important corner cases that are too tedious
-// to reach over HTTP.
-func TestDecorateModelChoices(t *testing.T) {
+// When the runtime rejects SetAgentModel, no in-memory or persisted
+// state must be mutated; the error must propagate verbatim.
+func TestSessionManager_SetSessionAgentModel_RuntimeFailureLeavesStateUntouched(t *testing.T) {
 	t.Parallel()
 
-	t.Run("synthesizes choice for inline override not in list", func(t *testing.T) {
-		t.Parallel()
-		got := decorateModelChoices(
-			[]runtime.ModelChoice{{Name: "default", Ref: "openai/gpt-4o-mini", IsDefault: true}},
-			"anthropic/claude-sonnet-4-0",
-			nil,
-		)
-		require.Len(t, got, 2)
-		assert.Equal(t, "anthropic/claude-sonnet-4-0", got[1].Ref)
-		assert.Equal(t, "anthropic", got[1].Provider)
-		assert.Equal(t, "claude-sonnet-4-0", got[1].Model)
-		assert.True(t, got[1].IsCurrent)
-		assert.True(t, got[1].IsCustom)
-	})
+	ctx := t.Context()
+	store := session.NewInMemorySessionStore()
+	sess := session.New()
+	sess.AgentModelOverrides = map[string]string{"root": "openai/gpt-4o"}
+	sess.CustomModelsUsed = []string{"openai/gpt-4o"}
+	require.NoError(t, store.AddSession(ctx, sess))
 
-	t.Run("does not duplicate custom ref already in list", func(t *testing.T) {
-		t.Parallel()
-		got := decorateModelChoices(
-			[]runtime.ModelChoice{{Name: "default", Ref: "openai/gpt-4o", IsDefault: true}},
-			"",
-			[]string{"openai/gpt-4o"},
-		)
-		require.Len(t, got, 1)
-		assert.Equal(t, "openai/gpt-4o", got[0].Ref)
-	})
+	fake := newModelSwitchingRuntime(nil)
+	fake.setErr = errors.New("runtime says no")
 
-	t.Run("non-provider override (config key) does not synthesize choice", func(t *testing.T) {
-		t.Parallel()
-		// "my_model" is a config key (no slash); when not in the runtime's
-		// list we should NOT fabricate a choice for it because we have no
-		// provider/model breakdown to display.
-		got := decorateModelChoices(
-			[]runtime.ModelChoice{{Name: "default", Ref: "default", IsDefault: true}},
-			"my_model",
-			nil,
-		)
-		require.Len(t, got, 1)
-		assert.False(t, got[0].IsCurrent, "default must not be marked current when override is unknown")
-	})
+	sm := NewSessionManager(ctx, config.Sources{}, store, 0, &config.RuntimeConfig{})
+	sm.AttachRuntime(sess.ID, fake, sess)
+
+	_, _, err := sm.SetSessionAgentModel(ctx, sess.ID, "anthropic/claude-sonnet-4-0")
+	require.Error(t, err)
+
+	// The original override must be intact.
+	assert.Equal(t, "openai/gpt-4o", sess.AgentModelOverrides["root"])
+	assert.Equal(t, []string{"openai/gpt-4o"}, sess.CustomModelsUsed)
 }
+
+// runtime.DecorateModelChoices is exercised end-to-end through the GET
+// handler tests above; unit-level corner cases live in pkg/runtime
+// (see model_switcher_test.go).
