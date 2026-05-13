@@ -29,7 +29,7 @@ const (
 func SetIdentity(req *http.Request) {
 	req.Header.Set("User-Agent", Header)
 	req.Header.Set(HeaderAgentVersion, version.Version)
-	if v := desktop.GetVersion(); v != "" {
+	if v := desktop.GetVersion(req.Context()); v != "" {
 		req.Header.Set(HeaderDesktopVersion, v)
 	}
 }
