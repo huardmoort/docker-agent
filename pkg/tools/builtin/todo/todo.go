@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 
 	"github.com/docker/docker-agent/pkg/concurrent"
+	"github.com/docker/docker-agent/pkg/config"
+	"github.com/docker/docker-agent/pkg/config/latest"
 	"github.com/docker/docker-agent/pkg/tools"
 )
 
@@ -19,15 +21,18 @@ const (
 	ToolNameListTodos   = "list_todos"
 )
 
-type Tool struct {
-	handler *todoHandler
+// CreateToolSet is used by the tools registry.
+func CreateToolSet(_ context.Context, toolset latest.Toolset, _ string, _ *config.RuntimeConfig, _ string) (tools.ToolSet, error) {
+	if toolset.Shared {
+		return newSharedTodoTool(), nil
+	}
+
+	return new(), nil
 }
 
-// Verify interface compliance
-var (
-	_ tools.ToolSet      = (*Tool)(nil)
-	_ tools.Instructable = (*Tool)(nil)
-)
+type tool struct {
+	handler *todoHandler
+}
 
 type Todo struct {
 	ID          string `json:"id" jsonschema:"ID of the todo item"`
@@ -131,7 +136,7 @@ func (s *MemoryTodoStorage) Clear(_ context.Context) {
 }
 
 // Option is a functional option for configuring a Tool.
-type Option func(*Tool)
+type Option func(*tool)
 
 // WithStorage sets a custom storage implementation for the Tool.
 // The provided storage must not be nil.
@@ -139,7 +144,7 @@ func WithStorage(storage Storage) Option {
 	if storage == nil {
 		panic("todo: storage must not be nil")
 	}
-	return func(t *Tool) {
+	return func(t *tool) {
 		t.handler.storage = storage
 	}
 }
@@ -149,10 +154,10 @@ type todoHandler struct {
 	nextID  atomic.Int64
 }
 
-var NewSharedTodoTool = sync.OnceValue(func() *Tool { return NewTodoTool() })
+var newSharedTodoTool = sync.OnceValue(func() *tool { return new() })
 
-func NewTodoTool(opts ...Option) *Tool {
-	t := &Tool{
+func new(opts ...Option) *tool {
+	t := &tool{
 		handler: &todoHandler{
 			storage: NewMemoryTodoStorage(),
 		},
@@ -163,7 +168,7 @@ func NewTodoTool(opts ...Option) *Tool {
 	return t
 }
 
-func (t *Tool) Instructions() string {
+func (t *tool) Instructions() string {
 	return `## Todo Tools
 
 Track task progress with todos:
@@ -288,7 +293,7 @@ func (h *todoHandler) listTodos(ctx context.Context, _ tools.ToolCall) (*tools.T
 	return h.jsonResult(ctx, out)
 }
 
-func (t *Tool) Tools(context.Context) ([]tools.Tool, error) {
+func (t *tool) Tools(context.Context) ([]tools.Tool, error) {
 	return []tools.Tool{
 		{
 			Name:         ToolNameCreateTodo,

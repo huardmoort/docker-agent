@@ -51,7 +51,7 @@ type ToolsetRegistry interface {
 func NewDefaultToolsetRegistry() ToolsetRegistry {
 	return &toolsetRegistry{
 		creators: map[string]ToolsetCreator{
-			"todo":              createTodoTool,
+			"todo":              todo.CreateToolSet,
 			"tasks":             createTasksTool,
 			"memory":            createMemoryTool,
 			"think":             createThinkTool,
@@ -168,13 +168,6 @@ func resolveToolsetPath(toolsetPath, parentDir string, runConfig *config.Runtime
 	}
 
 	return path.ValidatePathInDirectory(toolsetPath, basePath)
-}
-
-func createTodoTool(_ context.Context, toolset latest.Toolset, _ string, _ *config.RuntimeConfig, _ string) (tools.ToolSet, error) {
-	if toolset.Shared {
-		return todo.NewSharedTodoTool(), nil
-	}
-	return todo.NewTodoTool(), nil
 }
 
 func createTasksTool(_ context.Context, toolset latest.Toolset, parentDir string, runConfig *config.RuntimeConfig, _ string) (tools.ToolSet, error) {
