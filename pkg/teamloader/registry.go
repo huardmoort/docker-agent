@@ -58,7 +58,7 @@ func NewDefaultToolsetRegistry() ToolsetRegistry {
 			"fetch":             fetch.CreateToolSet,
 			"mcp":               createMCPTool,
 			"api":               api.CreateToolSet,
-			"a2a":               createA2ATool,
+			"a2a":               a2a.CreateToolSet,
 			"lsp":               createLSPTool,
 			"user_prompt":       userprompt.CreateToolSet,
 			"openapi":           createOpenAPITool,
@@ -250,14 +250,6 @@ func createMCPTool(ctx context.Context, toolset latest.Toolset, _ string, runCon
 	default:
 		return nil, errors.New("mcp toolset requires either ref, command, or remote configuration")
 	}
-}
-
-func createA2ATool(ctx context.Context, toolset latest.Toolset, _ string, runConfig *config.RuntimeConfig, _ string) (tools.ToolSet, error) {
-	expander := js.NewJsExpander(runConfig.EnvProvider())
-
-	headers := expander.ExpandMap(ctx, toolset.Headers)
-
-	return a2a.NewToolset(toolset.Name, toolset.URL, headers), nil
 }
 
 func createLSPTool(ctx context.Context, toolset latest.Toolset, _ string, runConfig *config.RuntimeConfig, _ string) (tools.ToolSet, error) {
