@@ -5,18 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
-	"os"
-	"path/filepath"
 
 	"github.com/docker/docker-agent/pkg/config"
 	"github.com/docker/docker-agent/pkg/config/latest"
-	"github.com/docker/docker-agent/pkg/environment"
-	"github.com/docker/docker-agent/pkg/gateway"
 	"github.com/docker/docker-agent/pkg/js"
-	"github.com/docker/docker-agent/pkg/path"
 	"github.com/docker/docker-agent/pkg/rag"
-	"github.com/docker/docker-agent/pkg/toolinstall"
 	"github.com/docker/docker-agent/pkg/tools"
 	"github.com/docker/docker-agent/pkg/tools/a2a"
 	agenttool "github.com/docker/docker-agent/pkg/tools/builtin/agent"
@@ -34,6 +27,7 @@ import (
 	"github.com/docker/docker-agent/pkg/tools/builtin/todo"
 	"github.com/docker/docker-agent/pkg/tools/builtin/userprompt"
 	"github.com/docker/docker-agent/pkg/tools/mcp"
+	"github.com/docker/docker-agent/pkg/tools/workingdir"
 )
 
 // ToolsetCreator is a function that creates a toolset based on the provided configuration.
@@ -56,7 +50,7 @@ func NewDefaultToolsetRegistry() ToolsetRegistry {
 			"script":            shell.CreateScriptToolSet,
 			"filesystem":        filesystem.CreateToolSet,
 			"fetch":             fetch.CreateToolSet,
-			"mcp":               createMCPTool,
+			"mcp":               mcp.CreateToolSet,
 			"api":               api.CreateToolSet,
 			"a2a":               a2a.CreateToolSet,
 			"lsp":               lsp.CreateToolSet,
@@ -94,22 +88,6 @@ func (r *toolsetRegistry) CreateTool(ctx context.Context, toolset latest.Toolset
 	return tools.WithName(ts, cmp.Or(toolset.Name, toolset.Type)), nil
 }
 
-// checkDirExists returns an error if the given directory does not exist or is
-// not a directory. toolsetType is used only in the error message.
-func checkDirExists(dir, toolsetType string) error {
-	info, err := os.Stat(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("working_dir %q for %s toolset does not exist", dir, toolsetType)
-		}
-		return fmt.Errorf("working_dir %q for %s toolset: %w", dir, toolsetType, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("working_dir %q for %s toolset is not a directory", dir, toolsetType)
-	}
-	return nil
-}
-
 // resolveToolsetWorkingDir returns the effective working directory for a toolset process.
 //
 // Resolution rules:
@@ -126,130 +104,7 @@ func checkDirExists(dir, toolsetType string) error {
 // a trusted, operator-authored value where cross-tree references (e.g. a sibling
 // module root in a monorepo) are intentional and must not be silently blocked.
 func resolveToolsetWorkingDir(toolsetWorkingDir, agentWorkingDir string) string {
-	if toolsetWorkingDir == "" {
-		return agentWorkingDir
-	}
-	// Expand ~ and environment variables before path operations.
-	toolsetWorkingDir = path.ExpandPath(toolsetWorkingDir)
-	if filepath.IsAbs(toolsetWorkingDir) {
-		return toolsetWorkingDir
-	}
-	if agentWorkingDir != "" {
-		// filepath.Abs cleans the result and anchors the URI correctly
-		// (avoids file://./backend-style LSP root URIs when the agent dir
-		// is itself absolute, which is the normal case).
-		abs, err := filepath.Abs(filepath.Join(agentWorkingDir, toolsetWorkingDir))
-		if err == nil {
-			return abs
-		}
-		// Fallback: return the joined path without Abs (should not happen in practice).
-		return filepath.Join(agentWorkingDir, toolsetWorkingDir)
-	}
-	// agentWorkingDir is empty and path is relative: return as-is.
-	// The child process will inherit the OS working directory.
-	return toolsetWorkingDir
-}
-
-func createMCPTool(ctx context.Context, toolset latest.Toolset, _ string, runConfig *config.RuntimeConfig, _ string) (tools.ToolSet, error) {
-	envProvider := runConfig.EnvProvider()
-
-	// Resolve the working directory once; used for all subprocess-based branches.
-	// Note: validation only rejects working_dir for toolsets with an explicit
-	// remote.url. Ref-based MCPs (e.g. ref: docker:context7) pass validation
-	// regardless, because their transport type is only known at runtime via the
-	// MCP Catalog API. If such a ref resolves to a remote server at runtime, we
-	// return an explicit error below rather than silently discarding the field.
-	cwd := resolveToolsetWorkingDir(toolset.WorkingDir, runConfig.WorkingDir)
-
-	// S1: validate the resolved directory exists (if one was specified) so we
-	// surface a clear error now rather than a cryptic exec failure later.
-	// Skip this check for ref-based toolsets whose transport type is not yet
-	// known — the check would be premature and potentially wrong.
-	if toolset.WorkingDir != "" && toolset.Ref == "" {
-		if err := checkDirExists(cwd, "mcp"); err != nil {
-			return nil, err
-		}
-	}
-
-	switch {
-	// MCP Server from the MCP Catalog, running with the MCP Gateway
-	case toolset.Ref != "":
-		mcpServerName := gateway.ParseServerRef(toolset.Ref)
-		serverSpec, err := gateway.ServerSpec(ctx, mcpServerName)
-		if err != nil {
-			return nil, fmt.Errorf("fetching MCP server spec for %q: %w", mcpServerName, err)
-		}
-
-		// TODO(dga): until the MCP Gateway supports oauth with docker agent, we fetch the remote url and directly connect to it.
-		if serverSpec.Type == "remote" {
-			// working_dir cannot be validated at config-parse time for ref-based
-			// MCPs because their transport type is only known here. Return a clear
-			// error rather than silently discarding the field.
-			if toolset.WorkingDir != "" {
-				return nil, fmt.Errorf("working_dir is not supported for MCP toolset %q: ref %q resolves to a remote server (no local subprocess)",
-					toolset.Name, toolset.Ref)
-			}
-			return mcp.NewRemoteToolset(toolset.Name, serverSpec.Remote.URL, serverSpec.Remote.TransportType, nil, nil, lifecyclePolicyFromConfig(toolset.Name, toolset.Lifecycle)), nil
-		}
-
-		// The ref resolves to a local subprocess — validate the working directory now.
-		if toolset.WorkingDir != "" {
-			if err := checkDirExists(cwd, "mcp"); err != nil {
-				return nil, err
-			}
-		}
-
-		env, err := environment.ExpandAll(ctx, environment.ToValues(toolset.Env), envProvider)
-		if err != nil {
-			return nil, fmt.Errorf("failed to expand the tool's environment variables: %w", err)
-		}
-
-		envProvider := environment.NewMultiProvider(
-			environment.NewEnvListProvider(env),
-			envProvider,
-		)
-
-		// Pass the resolved cwd so gateway-based MCPs also honour working_dir.
-		return mcp.NewGatewayToolset(ctx, toolset.Name, mcpServerName, serverSpec.Secrets, toolset.Config, envProvider, cwd)
-
-	// STDIO MCP Server from shell command
-	case toolset.Command != "":
-		// Auto-install missing command binary if needed.
-		// If EnsureCommand fails (binary not on PATH, no aqua package, etc.),
-		// treat as transient: create the toolset with the original command
-		// and let mcp.Toolset.Start() retry on each conversation turn.
-		resolvedCommand, err := toolinstall.EnsureCommand(ctx, toolset.Command, toolset.Version)
-		if err != nil {
-			slog.WarnContext(ctx, "MCP command not yet available, will retry on next turn",
-				"command", toolset.Command, "error", err)
-			resolvedCommand = toolset.Command
-		}
-
-		env, err := environment.ExpandAll(ctx, environment.ToValues(toolset.Env), envProvider)
-		if err != nil {
-			return nil, fmt.Errorf("failed to expand the tool's environment variables: %w", err)
-		}
-		env = append(env, os.Environ()...)
-
-		// Prepend tools bin dir to PATH so child processes can find installed tools
-		env = toolinstall.PrependBinDirToEnv(env)
-
-		return mcp.NewToolsetCommand(toolset.Name, resolvedCommand, toolset.Args, env, cwd, lifecyclePolicyFromConfig(toolset.Name, toolset.Lifecycle)), nil
-
-	// Remote MCP Server — working_dir is rejected at validation time for this
-	// branch (explicit remote.url in config). Ref-based MCPs that resolve to
-	// remote at runtime are handled with an explicit error in the Ref branch above.
-	case toolset.Remote.URL != "":
-		expander := js.NewJsExpander(envProvider)
-
-		headers := expander.ExpandMap(ctx, toolset.Remote.Headers)
-		url := expander.Expand(ctx, toolset.Remote.URL, nil)
-
-		return mcp.NewRemoteToolset(toolset.Name, url, toolset.Remote.TransportType, headers, toolset.Remote.OAuth, lifecyclePolicyFromConfig(toolset.Name, toolset.Lifecycle)), nil
-
-	default:
-		return nil, errors.New("mcp toolset requires either ref, command, or remote configuration")
-	}
+	return workingdir.Resolve(toolsetWorkingDir, agentWorkingDir)
 }
 
 func createOpenAPITool(ctx context.Context, toolset latest.Toolset, _ string, runConfig *config.RuntimeConfig, _ string) (tools.ToolSet, error) {
