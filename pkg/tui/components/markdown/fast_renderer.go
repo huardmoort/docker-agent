@@ -17,6 +17,7 @@ import (
 	xansi "github.com/charmbracelet/x/ansi"
 	runewidth "github.com/mattn/go-runewidth"
 
+	"github.com/docker/docker-agent/pkg/concurrent"
 	"github.com/docker/docker-agent/pkg/tui/styles"
 )
 
@@ -160,9 +161,7 @@ func ResetStyles() {
 	globalStylesMu.Unlock()
 
 	// Also clear chroma syntax highlighting caches
-	chromaStyleCacheMu.Lock()
-	chromaStyleCache = make(map[chroma.TokenType]ansiStyle)
-	chromaStyleCacheMu.Unlock()
+	chromaStyleCache.Clear()
 
 	syntaxHighlightCacheMu.Lock()
 	syntaxHighlightCache.clear()
@@ -2369,12 +2368,10 @@ type syntaxCacheKey struct {
 }
 
 var (
-	lexerCache   = make(map[string]chroma.Lexer)
-	lexerCacheMu sync.RWMutex
+	lexerCache concurrent.Map[string, chroma.Lexer]
 
 	// Cache for chroma token type to ansiStyle conversion (with code bg)
-	chromaStyleCache   = make(map[chroma.TokenType]ansiStyle)
-	chromaStyleCacheMu sync.RWMutex
+	chromaStyleCache concurrent.Map[chroma.TokenType, ansiStyle]
 
 	// Cache for syntax highlighting results to avoid re-tokenizing unchanged code blocks.
 	// Uses an LRU cache bounded to 128 entries to prevent unbounded memory growth
@@ -2440,14 +2437,11 @@ func (p *parser) getLexer(lang string) chroma.Lexer {
 		return nil
 	}
 
-	lexerCacheMu.RLock()
-	lexer := lexerCache[lang]
-	lexerCacheMu.RUnlock()
-	if lexer != nil {
+	if lexer, ok := lexerCache.Load(lang); ok {
 		return lexer
 	}
 
-	lexer = lexers.Get(lang)
+	lexer := lexers.Get(lang)
 	if lexer == nil {
 		lexer = lexers.Match("file." + lang)
 	}
@@ -2456,27 +2450,20 @@ func (p *parser) getLexer(lang string) chroma.Lexer {
 	}
 
 	lexer = chroma.Coalesce(lexer)
-	lexerCacheMu.Lock()
-	lexerCache[lang] = lexer
-	lexerCacheMu.Unlock()
+	lexerCache.Store(lang, lexer)
 	return lexer
 }
 
 func (p *parser) getCodeStyle(tokenType chroma.TokenType) ansiStyle {
-	chromaStyleCacheMu.RLock()
-	style, ok := chromaStyleCache[tokenType]
-	chromaStyleCacheMu.RUnlock()
-	if ok {
+	if style, ok := chromaStyleCache.Load(tokenType); ok {
 		return style
 	}
 
 	// Build lipgloss style with code background inherited
 	lipStyle := chromaToLipgloss(tokenType, p.styles.chromaStyle).Inherit(p.styles.styleCodeBg)
-	style = buildAnsiStyle(lipStyle)
+	style := buildAnsiStyle(lipStyle)
 
-	chromaStyleCacheMu.Lock()
-	chromaStyleCache[tokenType] = style
-	chromaStyleCacheMu.Unlock()
+	chromaStyleCache.Store(tokenType, style)
 	return style
 }
 
