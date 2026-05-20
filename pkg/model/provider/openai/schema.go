@@ -73,8 +73,12 @@ func hasIncompatibleNode(node map[string]any) bool {
 		return true
 	}
 
-	if additionalProps, ok := node["additionalProperties"].(map[string]any); ok && hasIncompatibleNode(additionalProps) {
-		return true
+	if prefixItems, ok := node["prefixItems"].([]any); ok {
+		for _, v := range prefixItems {
+			if sub, ok := v.(map[string]any); ok && hasIncompatibleNode(sub) {
+				return true
+			}
+		}
 	}
 
 	return false
@@ -105,6 +109,14 @@ func walkSchema(schema map[string]any, fn func(map[string]any)) {
 
 	if items, ok := schema["items"].(map[string]any); ok {
 		walkSchema(items, fn)
+	}
+
+	if prefixItems, ok := schema["prefixItems"].([]any); ok {
+		for _, v := range prefixItems {
+			if sub, ok := v.(map[string]any); ok {
+				walkSchema(sub, fn)
+			}
+		}
 	}
 
 	// additionalProperties can be a boolean or an object schema

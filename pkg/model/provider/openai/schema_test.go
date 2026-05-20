@@ -471,6 +471,24 @@ func TestIsStrictCompatible(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "schema-form additionalProperties nested in prefixItems is incompatible",
+			schema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"tuple": map[string]any{
+						"type": "array",
+						"prefixItems": []any{
+							map[string]any{
+								"type":                 "object",
+								"additionalProperties": map[string]any{"type": "string"},
+							},
+						},
+					},
+				},
+			},
+			want: false,
+		},
 	}
 
 	for _, tc := range cases {
