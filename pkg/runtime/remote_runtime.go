@@ -35,6 +35,14 @@ type RemoteRuntime struct {
 	team                    *team.Team
 	pendingOAuthElicitation *ElicitationRequestEvent
 
+	// pendingModelOverride is the model ref to apply to the current agent
+	// on the next [RemoteRuntime.RunStream] call. It is set by
+	// [RemoteRuntime.SetAgentModel] and consumed once the override has
+	// been forwarded to the server, which persists it server-side as the
+	// session's per-agent override.
+	pendingMu            sync.Mutex
+	pendingModelOverride string
+
 	// resolvedDefault caches the team's default agent name fetched from the
 	// server, so [CurrentAgentName] stays an O(1) field read after the first
 	// call when no specific agent has been selected.
@@ -242,13 +250,18 @@ func (r *RemoteRuntime) RunStream(ctx context.Context, sess *session.Session) <-
 		messages := r.convertSessionMessages(sess)
 		r.sessionID = sess.ID
 
+		r.pendingMu.Lock()
+		model := r.pendingModelOverride
+		r.pendingModelOverride = ""
+		r.pendingMu.Unlock()
+
 		var streamChan <-chan Event
 		var err error
 
 		if r.currentAgent != "" {
-			streamChan, err = r.client.RunAgentWithAgentName(ctx, r.sessionID, r.agentFilename, r.currentAgent, messages)
+			streamChan, err = r.client.RunAgentWithAgentName(ctx, r.sessionID, r.agentFilename, r.currentAgent, messages, model)
 		} else {
-			streamChan, err = r.client.RunAgent(ctx, r.sessionID, r.agentFilename, messages)
+			streamChan, err = r.client.RunAgent(ctx, r.sessionID, r.agentFilename, messages, model)
 		}
 
 		if err != nil {
@@ -544,12 +557,17 @@ func (r *RemoteRuntime) AvailableModels(ctx context.Context) []ModelChoice {
 	return choices
 }
 
-// SetAgentModel sets the model for the agent.
-func (r *RemoteRuntime) SetAgentModel(ctx context.Context, _, modelRef string) error {
-	if r.sessionID == "" {
-		return errors.New("no active session")
-	}
-	return r.client.SetAgentModel(ctx, r.sessionID, modelRef)
+// SetAgentModel queues modelRef as the override to apply on the session's
+// current agent. The override is forwarded to the server on the next
+// [RemoteRuntime.RunStream] call, where the server persists it as the
+// per-agent model override (same effect as the historic dedicated endpoint,
+// just without the extra round trip). A subsequent call before the next
+// turn replaces the queued ref; an empty string clears it.
+func (r *RemoteRuntime) SetAgentModel(_ context.Context, _, modelRef string) error {
+	r.pendingMu.Lock()
+	r.pendingModelOverride = modelRef
+	r.pendingMu.Unlock()
+	return nil
 }
 
 // SupportsModelSwitching returns true for remote runtimes (model switching is handled server-side).
