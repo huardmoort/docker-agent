@@ -52,8 +52,8 @@ func (b *attachmentBanner) updateHeight() {
 		b.height = 0
 		return
 	}
-	// Banner takes 1 line when visible
-	b.height = 1
+	// Separator line + pills line
+	b.height = 2
 }
 
 func (b *attachmentBanner) View() string {
@@ -90,7 +90,12 @@ func (b *attachmentBanner) View() string {
 		Foreground(styles.TextSecondary).
 		Render(content)
 
-	return styles.AttachmentBannerStyle.Render(banner)
+	divider := styles.BannerSeparatorStyle.Render(strings.Repeat("─", 40))
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		divider,
+		styles.AttachmentBannerStyle.Render(banner),
+	)
 }
 
 func (b *attachmentBanner) buildRegions(pills []string, separator string) {

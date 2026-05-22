@@ -399,6 +399,11 @@ var (
 
 	AttachmentIconStyle = BaseStyle.
 				Foreground(Info)
+
+	// BannerSeparatorStyle renders the thin horizontal rule drawn above the
+	// attachment banner pills.
+	BannerSeparatorStyle = BaseStyle.
+				Foreground(BorderMuted)
 )
 
 // Scrollbar

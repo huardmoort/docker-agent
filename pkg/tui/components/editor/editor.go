@@ -880,6 +880,13 @@ func (e *editor) Update(msg tea.Msg) (layout.Model, tea.Cmd) {
 }
 
 func (e *editor) handleClipboardPaste() (layout.Model, tea.Cmd) {
+	if imgPath, err := readClipboardImage(); err == nil && imgPath != "" {
+		if attachErr := e.AttachFile(imgPath); attachErr == nil && len(e.attachments) > 0 {
+			e.attachments[len(e.attachments)-1].isTemp = true
+		}
+		return e, textarea.Blink
+	}
+
 	content, err := clipboard.ReadAll()
 	if err != nil {
 		slog.Warn("failed to read clipboard", "error", err)
