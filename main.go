@@ -19,7 +19,7 @@ func main() {
 	var (
 		configFile  = flag.String("config", "/etc/docker-agent/config.yaml", "Path to configuration file")
 		showVersion = flag.Bool("version", false, "Print version information and exit")
-		logLevel    = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+		logLevel    = flag.String("log-level", "debug", "Log level (debug, info, warn, error)") // personal: default to debug for easier local dev
 		debug       = flag.Bool("debug", false, "Enable debug mode (overrides log-level)")
 	)
 	flag.Parse()
