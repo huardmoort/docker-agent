@@ -67,7 +67,11 @@ func main() {
 	}
 
 	if err := a.Run(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "agent exited with error: %v\n", err)
-		os.Exit(1)
+		// Note: context.Canceled is expected on clean shutdown via signal; don't
+		// treat it as a fatal error so the exit code stays 0 in that case.
+		if err != context.Canceled {
+			fmt.Fprintf(os.Stderr, "agent exited with error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 }
