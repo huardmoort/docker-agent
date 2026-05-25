@@ -32,7 +32,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		DockerHost:   client.DefaultDockerHost,
-		PollInterval: 30 * time.Second,
+		PollInterval: 15 * time.Second, // reduced from 30s for faster reconciliation during local dev
 		Labels:       map[string]string{},
 		LogLevel:     "info",
 	}
@@ -116,25 +116,4 @@ func (a *Agent) Start(ctx context.Context) error {
 }
 
 // Stop signals the agent to cease operation gracefully.
-func (a *Agent) Stop() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.running {
-		close(a.stopCh)
-		a.running = false
-	}
-}
-
-// reconcile inspects the current container state and performs any
-// corrective actions required to reach the desired state.
-func (a *Agent) reconcile(ctx context.Context) error {
-	containers, err := a.client.ContainerList(ctx, containertypes.ListOptions{
-		All: true,
-	})
-	if err != nil {
-		return fmt.Errorf("listing containers: %w", err)
-	}
-
-	a.log.WithField("count", len(containers)).Debug("reconcile: container snapshot")
-	return nil
-}
+func (a *Age
