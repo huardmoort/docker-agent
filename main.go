@@ -74,5 +74,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "agent exited with error: %v\n", err)
 			os.Exit(1)
 		}
+		// personal: log clean shutdown explicitly so it's obvious in terminal output
+		fmt.Println("agent shut down cleanly")
 	}
 }
