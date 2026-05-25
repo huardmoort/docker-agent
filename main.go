@@ -50,7 +50,8 @@ func main() {
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		// Also handle SIGHUP so I can reload config without a full restart.
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+		// personal: also catch SIGQUIT so I can trigger a goroutine dump during debugging.
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 		select {
 		case sig := <-sigCh:
 			fmt.Printf("received signal %s, shutting down\n", sig)
