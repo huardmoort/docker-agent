@@ -77,5 +77,8 @@ func main() {
 		}
 		// personal: log clean shutdown explicitly so it's obvious in terminal output
 		fmt.Println("agent shut down cleanly")
+	} else {
+		// personal: also print a clean-exit message when Run returns nil (e.g. during tests)
+		fmt.Println("agent exited without error")
 	}
 }
