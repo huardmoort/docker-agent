@@ -61,6 +61,11 @@ func New(cfg Config) (*Agent, error) {
 	}
 	log.SetLevel(level)
 
+	// Use a text formatter with full timestamps for easier log reading locally.
+	log.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+
 	dockerClient, err := client.NewClientWithOpts(
 		client.WithHost(cfg.DockerHost),
 		client.WithAPIVersionNegotiation(),
@@ -109,10 +114,4 @@ func (a *Agent) Start(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			if err := a.reconcile(ctx); err != nil {
-				a.log.WithError(err).Warn("reconciliation error")
-			}
-		}
-	}
-}
-
-// Sto
+			
