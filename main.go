@@ -25,7 +25,8 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("docker-agent version %s (commit: %s)\n", version.Version, version.GitCommit)
+		// personal: also print build date if available, handy when juggling multiple local builds
+		fmt.Printf("docker-agent version %s (commit: %s, built: %s)\n", version.Version, version.GitCommit, version.BuildDate)
 		os.Exit(0)
 	}
 
