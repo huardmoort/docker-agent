@@ -32,9 +32,9 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		DockerHost:   client.DefaultDockerHost,
-		PollInterval: 15 * time.Second, // reduced from 30s for faster reconciliation during local dev
+		PollInterval: 10 * time.Second, // reduced from 15s; I find faster polling more responsive during dev
 		Labels:       map[string]string{},
-		LogLevel:     "info",
+		LogLevel:     "debug", // default to debug in my fork for easier local troubleshooting
 	}
 }
 
@@ -115,5 +115,4 @@ func (a *Agent) Start(ctx context.Context) error {
 	}
 }
 
-// Stop signals the agent to cease operation gracefully.
-func (a *Age
+// Sto
