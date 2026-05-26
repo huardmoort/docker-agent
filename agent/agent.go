@@ -62,8 +62,10 @@ func New(cfg Config) (*Agent, error) {
 	log.SetLevel(level)
 
 	// Use a text formatter with full timestamps for easier log reading locally.
+	// Also disable colour output so logs are clean when piped to a file.
 	log.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp: true,
+		FullTimestamp:    true,
+		DisableColors:    true,
 	})
 
 	dockerClient, err := client.NewClientWithOpts(
@@ -109,9 +111,4 @@ func (a *Agent) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			a.log.Info("context cancelled, agent shutting down")
 			return ctx.Err()
-		case <-a.stopCh:
-			a.log.Info("stop signal received, agent shutting down")
-			return nil
-		case <-ticker.C:
-			if err := a.reconcile(ctx); err != nil {
-			
+		case <-a.
